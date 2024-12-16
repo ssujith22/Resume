@@ -1,0 +1,61 @@
+
+
+--Total Sales Per branch
+SELECT 
+    Branch,
+    SUM(Total) AS TotalSales,
+    COUNT(DISTINCT InvoiceID) AS NumberOfTransactions
+FROM 
+    RetailSales
+GROUP BY 
+    Branch
+ORDER BY 
+    TotalSales DESC;
+
+--Customer Type Analysis
+SELECT 
+    CustomerType,
+    SUM(Total) AS TotalSales,
+    AVG(Rating) AS AverageRating
+FROM 
+    RetailSales
+GROUP BY 
+    CustomerType
+ORDER BY 
+    TotalSales DESC;
+
+-- Margin Analysis
+SELECT 
+    Branch,
+    SUM(Total) AS TotalSales,
+    SUM(COGS) AS TotalCOGS,
+    SUM(Total) - SUM(COGS) AS GrossProfit
+FROM 
+    RetailSales
+GROUP BY 
+    Branch
+ORDER BY 
+    GrossProfit DESC;
+
+-- identify peak sales days
+SELECT 
+    SaleDate,
+    SUM(Total) AS TotalSales,
+    COUNT(DISTINCT InvoiceID) AS NumberOfTransactions
+FROM 
+    RetailSales
+GROUP BY 
+    SaleDate
+ORDER BY 
+    SaleDate;
+
+--Sales Trends Over Time (Monthly)
+SELECT 
+    CONVERT(VARCHAR(7), SaleDate, 120) AS SaleMonth,  
+    SUM(Total) AS TotalSales
+FROM 
+    RetailSales
+GROUP BY 
+    CONVERT(VARCHAR(7), SaleDate, 120)
+ORDER BY 
+    SaleMonth;

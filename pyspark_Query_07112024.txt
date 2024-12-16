@@ -1,0 +1,676 @@
+
+#--------------------------------------
+
+#Non-lazy Operations (Actions):
+first() #always it diplay 1 row (we can not provide argument) (individual rows object)
+
+head() #default 1 row , with out argument (return n data in the form of lists of Row objects)
+collect() #retrieves all rows (return data in the form of lists of Row objects)
+    #df.collect()[0]: Retrieves the first row as a Row object.
+    #df.collect()[0][0]: Retrieves the value of the first column of the first row.    
+take() #take(n) only retrieves the first n rows
+
+show() #display in tabular format(by default 20)
+count()
+
+#Lazy Operations (Transformations):
+select(), 
+filter(), 
+limit(), 
+groupBy(), 
+withColumn(), 
+drop(), 
+selectExpr(), 
+join(), 
+orderBy(), 
+distinct(), 
+union(), 
+alias()
+
+#----------------------------------------------
+
+from pyspark.sql import SparkSession
+
+from pyspark.sql import * #imports all functions, allowing you to use them directly without the F prefix.
+#Note:
+#Imports everything from the pyspark.sql module.
+#Pros: Quick and easy to use; you can access all classes and functions without needing to specify them.
+#Cons: Can lead to namespace pollution,*/
+--(or)ss
+from pyspark.sql import functions as F
+--(or)
+from pyspark.sql.functions import count, sum, when  #Make sure to import only the necessary functions if you decide not to use the F prefix.
+
+
+#Initialize SparkSession
+spark = SparkSession.builder.appName("PySpark Examples").getOrCreate()
+ 
+#Sample data
+data = [    (1, 'A', 'P1', 100),
+            (2, 'A', 'P2', 200),
+            (3, 'B', 'P3', 150),
+	   ]
+ 
+columns = ['id', 'category', 'product', 'sales']
+ 
+#Create DataFrame
+df = spark.createDataFrame(data, columns)
+
+#Using a List of Lists
+data = [["Alice", 30], ["Bob", 25], ["Cathy", 29]]
+columns = ["Name", "Age"]
+df = spark.createDataFrame(data, columns)
+
+#Using a List of Tuples
+data = [("Alice", 30), ("Bob", 25), ("Cathy", 29)]
+columns = ["Name", "Age"]
+df = spark.createDataFrame(data, columns)
+
+#Using a Dictionary
+data = {
+    "Name": ["Alice", "Bob", "Cathy"],
+    "Age": [30, 25, 29]
+}
+df = spark.createDataFrame(data)
+
+#Using a Pandas DataFrame
+import pandas as pd
+
+pdf = pd.DataFrame({
+    "Name": ["Alice", "Bob", "Cathy"],
+    "Age": [30, 25, 29]
+})
+df = spark.createDataFrame(pdf)
+
+#Using RDDs (Resilient Distributed Datasets)
+rdd = spark.sparkContext.parallelize([("Alice", 30), ("Bob", 25), ("Cathy", 29)])
+df = rdd.toDF(["Name", "Age"])
+
+#Creating an Empty DataFrame
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+
+schema = StructType([
+    StructField("Name", StringType(), True),
+    StructField("Age", IntegerType(), True)
+])
+
+df_empty = spark.createDataFrame(spark.sparkContext.emptyRDD(), schema)
+
+
+# Display DataFrame
+display(df)  #This is often used in environments like Databricks notebooks and It's not a standard PySpark function and is specific to certain environments.
+df.show()  #By default, it shows the first 20 rows
+df.show(truncate=False)
+df = df.printSchema()
+df.head() #default 5 rows
+df = df.describe() #Getting Summary Statistics:
+
+row_count = df.count()
+print(f"Total rows: {row_count}")
+
+#Select specific columns
+selected_df = df.select()  # This will result in an empty DataFrame
+df.select(df.id, df.product).show()  #df.select('id', 'product').show()
+df = df.select(df.name.alias("full_name"), df["age"])
+result_df = df.select("id", "value").filter(df.id > 2)
+result_df = df.select("id", "value").sort("id")
+
+result_df = df.select(   "id",    "name",    "age",
+    when(col("age") < 18, "Minor")  # Condition for minors
+    .when((col("age") >= 18) & (col("age") < 65), "Adult")  # Condition for adults
+    .otherwise("Senior")  # Otherwise, it's a senior
+    .alias("age_category")  # Give the new column a name
+)
+
+#Order by a column
+df.orderBy(df.sales, ascending=False).show()  #The default behavior of orderBy in PySpark is to sort in ascending order.
+df.sort("department","state").show(truncate=False)
+df.orderBy(df.department.asc(), df.state.desc()).show(truncate=False)
+df.groupBy('Country').agg(countDistinct('CustomerID').alias('country_count')).orderBy(desc('country_count')).show()
+
+#Get distinct values
+df.select(df.category).distinct().show()
+df.select("Name").distinct().count()
+
+# Drop duplicates column & rows & handling null
+df = df.dropDuplicates()  #to remove duplicate rows.
+df = df.dropDuplicates(["id"]
+df = df.drop("rating")  #to remove specified columns. --The drop method expects the name of the column (as a string) 
+
+df = df.na.drop() # removeds rows in any of the column having null
+df = df.na.drop(subset=["Name", "City"]) # remove rows that having null in both column
+
+df = df.na.fill({'name': 'Unknown', 'city': 'Unknown'}) #replace null as unknown 
+df = df.fillna({'name': 'Unknown', 'city': 'Unknown'})
+
+#Select
+df.select("Name").groupBy("Name").count().show()
+df.select(max("InvoiceDate")).show()
+df.select("*").show()
+
+#Filter rows using where
+df = df.where(df.sales > 200)
+df = df.where(df["name"].isNull())
+df = df.where(df["Name"].isNotNull())
+df = df.where(df.city.isNotNull() & df.name.isNotNull()) 
+df = df.where(df["age"].between(30, 40))
+df = df.where(df["Name"].like("A%"))
+df = df.filter(df["name"].startswith("A"))
+df.filter(df.state.endswith("H")).show()
+df.filter(df.state.contains("H")).show()
+
+#Using isin() for Multiple Conditions:
+df_isin = df_csv.filter(df_csv["department"].isin(["HR", "Finance"]))
+
+df_with_raise = df.selectExpr("name", "salary", "salary * 1.1 AS raised_salary")
+
+#Group by a column and Aggregate
+df.groupBy(df.category).count().show()
+df.groupBy(df.category).sum(df.sales).show()
+
+df.groupBy("department","state") .sum("salary","bonus") .show()
+
+df2.rollup("state").agg(F.sum("sales").alias("total_sales")).show()
+df2.cube("state", "gender").agg(F.count("*").alias("count")).show()
+
+df=df.groupBy("customer_id","Customer_Fname", "Customer_Lname")
+            .agg(sum(sales).alias("total_sales"), sum(order_profit_per_order).alias(total_profit)    )    
+#(or)  
+df = df.groupBy( df.customer_id, df.Customer_Fname, df.Customer_Lname)
+            .agg( F.sum(df.sales).alias("total_sales"), F.sum(df.order_profit_per_order).alias("total_profit")  )
+ 
+df = df.agg(    F.count("*").alias("TotalOrders"),
+                F.countDistinct("salary").alias("TotalOrders1"),  #distinct count
+                F.collect_set("salary").alias("distinct_salaries"),#distinct values 200,300
+                f.collect_list("salary").alias("salaries_list"),# 200,200,300
+                F.sum(F.when(df.Order_Status == "COMPLETE", 1).otherwise(0)).alias("CompletedOrders"),
+                (F.sum(F.when(df.Order_Status == "COMPLETE", 1).otherwise(0)) * 100.0 / F.count("*")).alias("CompletedOrderPercentage") )
+
+df.groupBy("department") \
+    .agg(sum("salary").alias("sum_salary"), \
+        avg("salary").alias("avg_salary"), \
+        sum("bonus").alias("sum_bonus"), \
+        max("bonus").alias("max_bonus")) \
+    .where(col("sum_bonus") >= 50000) \
+    .show(truncate=False)
+
+#withColumn & Case when & rename
+df = df.withColumnRenamed("old_name", "new_name")
+df = df.withColumnRenamed("Name", "Full_Name").withColumnRenamed("ID", "Identifier")
+
+df = df.withColumn("new_col", df.existing_col * 10)
+df = df.withColumn("new_col1", df["salary"] * 1.1) .withColumn("new_col2", df["age"] + 5)  
+df = df.withColumn("full_name", concat(df["first_name"], F.lit(" "), df["last_name"]))
+df2 = df2.withColumn("full_name", F.concat_ws(" ", df2.name.firstname, df2.name.lastname))
+df = df.withColumn("name_upper", upper(df["name"]))  # import upper in functin
+df = df.withColumn("name_length", F.length(df["name"]))
+df.select(trim(col("string")))
+
+df.withColumn("ID", df["ID"].cast("string")).show() #Changing Column Data Type
+df.select(col("column").cast("datatype"))
+
+df2 = df2.withColumn("preferred_name", coalesce(df2.name.firstname, df2.name.middlename, df2.name.lastname))
+df2.select("preferred_name").show(truncate=False)
+
+#F.expr() is a powerful function used to execute SQL expressions within the DataFrame
+df = df.withColumn("substring", F.expr("substring(name, 1, 3)"))
+df = df.withColumn("name_type", F.expr("CASE WHEN length(name) > 4 THEN 'Long' ELSE 'Short' END"))
+
+df = df.withColumn("name", F.regexp_replace(df["name"], "old", "new"))
+df = df.withColumn("first_name", F.split(df["full_name"], " ")[0])
+
+---------------------------
+# Get current date
+current_date_df = spark.range(1).select(current_date().alias("current_date")) # 2024-10-30
+
+#spark.range(n):
+#n: The upper limit for the range (exclusive).
+#Starting Point: It starts at 0 by default.
+#Default Step: The default step size is 1.
+
+#spark.range(1, 10, 2) -- 1 ,3,5,7,9 (
+#start: The beginning of the range (inclusive).
+#end: The end of the range (exclusive).
+
+---------------------
+#No trailing comma is needed in multi-element tuples (e.g., (1, 100, "2023-01-15")).
+#A trailing comma is necessary only for single-element tuples (e.g., (1,)).
+
+#Why the Comma?
+ Without the comma, Python would interpret the parentheses as just grouping the value rather than creating a tuple.
+Examples:
+#Single Element Tuple:
+single_element_tuple = ("2024-04-18",)  # This is a tuple
+
+#Not a Tuple:
+not_a_tuple = ("2024-04-18")  # This is just a string, not a tuple
+
+#Multiple Elements:
+multiple_elements_tuple = ("2024-04-18", "2023-12-25")  # This is a tuple with two elements
+
+# Sample data as string column
+data = [("2024-04-18",), 
+        ("2023-12-25",), 
+        ("2022-09-10",)]
+
+# Define schema (if needed) or use default
+columns = ["date_string"]
+
+# Create DataFrame
+df = spark.createDataFrame(data, columns)
+---
+
+# Sample DataFrame with two date columns
+data = [("2024-04-18", "2024-01-10"),
+        ("2023-12-25", "2023-11-25"),
+        ("2022-09-10", "2022-08-01")]
+
+df = spark.createDataFrame(data, ["date1_string", "date2_string"])
+
+------------------
+#Converts a string column into a date type
+df = df.withColumn("date_col", to_date(df["date_string"], "yyyy-MM-dd"))  #to_date import in func
+
+#changing existing date column to outputs a string
+df = df.withColumn("formatted_date", date_format(df["date"], "yyyy/MM/dd"))
+
+df = df.withColumn("current_date", current_date())
+
+---
+# Create a DataFrame with current timestamp
+df = spark.range(1).select(current_timestamp().alias("current_timestamp")) #2024-10-30 10:11:00.222
+
+# Apply to_timestamp function to convert string to timestamp
+df = df.withColumn("timestamp", to_timestamp(df["timestamp_string"]))
+-----
+
+df = df.withColumn("date_plus_5", date_add(df["date_column"], 5))
+df = df.withColumn("date_minus_5", date_sub(df["date_column"], 5))
+df = df.withColumn("days_diff", F.datediff(F.current_date(), df["date_column"]))
+
+# Apply months_between to calculate the difference in months
+df = df.withColumn("months_difference", months_between(df["date1"], df["date2"])) #3.25806452
+
+# Calculate using floor,round,ceil
+df = df.withColumn("months_difference_floor", floor(df["months_difference"]))
+
+#months_between, floor, ceil, round
+#    3.6,          3,    4,     4
+#    3.4,          3,    4,     3
+#    3.5,          3,    4,     4
+
+-------------------
+
+df = df.withColumn("year", year(df["date_column"])) \
+         .withColumn("month", month(df["date_column"])) \
+         .withColumn("day", dayofmonth(df["date_column"]))\
+         
+#timestamp date values (frst we need to convert timestamp string to timestamp type)    
+df = df..withColumn("day", hour(df["date_column"])) #minute,second
+         
+df = df.withColumn( "rating",
+                        when(df["score"] >= 90, "`")
+                        .when((df["score"] < 90) & (df["score"] >= 75), "B")
+                        .otherwise("C")     )
+
+df = df.withColumn(  "rating", 
+                       F.when(df.rating >= 4, "Premium").otherwise("Standard")  )
+#or
+df = df.withColumn( "rating", 
+                    F.when(F.col("rating") >= 4, "Premium").otherwise("Standard")   )
+#or                           
+df = df.withColumn(  "rating", 
+                        F.when(F.col("rating") >= 4, F.lit("Premium")).otherwise(F.lit("Standard")) )
+#Note:
+#The F.lit() function is used to specify literal values, which can be strings, integers, floats, or any other constant value.
+
+#Pivot
+df = df.groupBy("department").pivot("gender").agg(F.avg("salary"))
+df = df.groupBy("Department").pivot("Name").sum("Salary")
+
+#Types of Window Functions:
+
+#Ranking Functions: These include row_number(), rank(), dense_rank(), and percent_rank().
+#Analytic Functions: These include cume_dist(), ntile(), lag(), and lead().
+#Aggregate Functions: These can be used as window functions, such as sum(), avg(), min(), and max().
+
+from pyspark.sql.window import Window
+window_spec = Window.partitionBy("column1").orderBy("column2")
+
+from pyspark.sql.functions import row_number,rank,lag,lead,dense_rank,sum
+df.withColumn("row_number", row_number().over(window_spec)).show()
+df.withColumn("rank", rank().over(window_spec)).show()
+df.select("column",
+        rank().over(Window.orderBy("column")).alias("rank"))
+
+df.withColumn("dense_rank", dense_rank().over(window_spec)).show()
+df.withColumn("previous_value", lag("column_name", 1).over(window_spec)).show()
+df.withColumn("next_value", lead("column_name", 1).over(window_spec)).show()
+
+from pyspark.sql import Window
+import pyspark.sql.functions as F
+window_spec = Window.partitionBy("department")
+df = df.withColumn("avg_department_salary", F.avg("salary").over(window_spec))
+df.show()
+
+#window_spec = Window.orderBy("Age")
+#df_with_row_num = df.withColumn("row_number", row_number().over(window_spec))
+
+
+#window_spec = Window.partitionBy("Department").orderBy(df["Salary"].desc())
+#df_with_rank = df.withColumn("Rank", rank().over(window_spec))
+
+#Calculate Rolling Average of Sales over Last 3 Transactions for Each Customer
+window_spec = Window.partitionBy("CustomerID").orderBy("Sales").rowsBetween(-2, 0)
+df_with_rolling_avg = df.withColumn("RollingAvg", avg(col("Sales")).over(window_spec))
+
+# Window specification & # Add cumulative sum column
+window_spec = Window.partitionBy("Department").orderBy("Salary").rowsBetween(Window.unboundedPreceding, Window.currentRow)
+df = df.withColumn("cumulative_sum", sum("Salary").over(window_spec))
+
+#Get the Latest Transaction Date for Each CustomerHow would you find the latest transaction date for each customer 
+from pyspark.sql.functions import to_date
+df = df.withColumn("TransactionDate", to_date(col("TransactionDate")))
+window_spec = Window.partitionBy("CustomerID")
+df_with_latest_date = df.withColumn("LatestTransactionDate", max("TransactionDate").over(window_spec))
+latest_transaction = df_with_latest_date.select("CustomerID", "LatestTransactionDate").distinct()
+#or
+latest_transaction = df.groupBy("CustomerID") \
+                        .agg(max("TransactionDate").alias("LatestTransactionDate"))
+
+#-----explode------------------------------------------
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import explode
+# Step 1: Create a Spark session
+spark = SparkSession.builder \
+    .appName("Explode Example") \
+    .getOrCreate()
+# Step 2: Create the original DataFrame
+data = [
+    ("Book1", ["Fiction", "Mystery"]),
+    ("Book2", ["Fantasy", "Adventure"]),
+    ("Book3", ["Science Fiction"]),
+    ("Book4", ["Non-fiction", "History", "Biography"])
+]
+columns = ["Book", "Genres"]
+original_df = spark.createDataFrame(data, schema=columns)
+# Step 3: Use explode() to transform the DataFrame
+df_exploded = original_df.select("Book", explode("Genres").alias("Genre"))
+# Step 4: Show the transformed DataFrame
+df_exploded.show()
+
+
+#join
+df = df1.join(df2, "Name") # default Inner Join
+df = df1.join(df2, "Name", "left").orderBy(desc("Name"))
+df = df1.join(df2, on="id", how="inner")
+df = df1.join(df2, df1["id"] == df2["id"], "inner")
+df_leftjoined = df_employees.join(df_departments, df_employees.dept_id == df_departments.dept_id, "left")
+df2 = df2.join(df3, df2.id == df3.id, "outer").select(df2["*"], df3["department"])
+df2 = df2.join(df3, (df2.id == df3.id) & (df2.state == df3.state), "inner") #multiple join condition
+
+df1.union(df2).show()
+df1.union(df2).select("column")
+df1.intersect(df2).show()
+df1.exceptAll(df2).show()
+
+self_joined_df = df.alias("a").join(df.alias("b"), F.col("a.manager_id") == F.col("b.id"))
+self_joined_df.select("a.name", "b.name").show()
+
+
+df = df.join(df.groupBy('CustomerID').agg(max('Quantity').alias('Quantity')),on = 'Quantity',how='leftsemi')
+
+max_quantity_df = df.groupBy('CustomerID').agg(max('Quantity').alias('MaxQuantity')) # Step 1: Find maximum Quantity per CustomerID
+df_filtered = df.join(max_quantity_df, on=['CustomerID', 'Quantity'], how='leftsemi') # Step 2: Perform a left semi join with the original DataFrame
+
+#Spark SQL:
+df.createOrReplaceTempView("temp_table")
+sql_df = spark.sql("SELECT * FROM temp_table WHERE age > 30")
+
+#read and write file
+df = spark.read.parquet("path/to/file.parquet")
+df = spark.read.csv("path/to/file.csv", header=True, inferSchema=True)
+
+df.write.mode("overwrite").parquet("path/to/output")
+df.write.parquet("/FileStore/sample_ecommerce_data", mode="overwrite")
+df.write.csv("/FileStore/sample_ecommerce_data_transformed", mode="overwrite")
+
+------------------
+# Write DataFrame to Delta format
+
+df.write.format("delta").mode("overwrite").save("/mnt/<YOUR_MOUNT_NAME>/delta_table")
+delta_df = spark.read.format("delta").load("/mnt/<YOUR_MOUNT_NAME>/delta_table") #read
+
+from delta.tables import *
+
+deltaTable = DeltaTable.forPath(spark, "/mnt/<YOUR_MOUNT_NAME>/delta_table")
+
+deltaTable.update(    condition = "Id = 1",    set = { "Name": "'Alice Updated'" }  ) # Update example
+new_df.write.format("delta").mode("append").save("/mnt/<YOUR_MOUNT_NAME>/delta_table") #append(insert)
+
+# Show the history of the Delta table
+delta_table.history().show()
+
+# Querying version 0
+version_0_df = spark.read.format("delta").option("versionAsOf", 0).load("/mnt/delta_table")
+version_0_df.show()
+
+#By default, the data will be stored in a directory structure under a predefined warehouse directory 
+#(like /user/hive/warehouse in HDFS) if you are using Hive.
+df.write.format("delta") \
+    .mode("overwrite") \
+    .saveAsTable("people_delta_table")  #Saves the DataFrame as a Hive table i
+------------------
+
+#Creating DataFrame from a List of Tuples:
+data = [("Alice", 34), ("Bob", 45), ("Cathy", 29)]
+columns = ["Name", "Age"]
+df = spark.createDataFrame(data, columns)
+
+#Creating DataFrame from a Dictionary:
+data_dict = [{"Name": "Alice", "Age": 34}, {"Name": "Bob", "Age": 45}]
+df_dict = spark.createDataFrame(data_dict)
+df_dict.show()
+
+#Creating DataFrames from RDDs
+rdd = spark.sparkContext.parallelize([("Alice", 1), ("Bob", 2)])
+df = rdd.toDF(["Name", "ID"])
+df.show()
+
+#Creating DataFrames from Pandas
+import pandas as pd
+pdf = pd.DataFrame({"Name": ["Alice", "Bob"], "ID": [1, 2]})
+df = spark.createDataFrame(pdf)
+df.show()
+
+# repartition incrse and descrease
+df = df.coalesce(1)  # to reduce the DataFrame to a single partition without a shuffle, which is efficient for final outputs.
+df = df.repartition(5) #to redistribute data into exactly 5 partitions, possibly increasing the number of partitions and causing a shuffle.
+
+#Implicit & Explicit Schema creation
+    from pyspark.sql import SparkSession
+    from pyspark.sql.types import StructType, StructField, StringType, IntegerType
+
+    spark = SparkSession.builder.appName("ExampleApp") .getOrCreate()
+
+    data = [("Alice", 1), ("Bob", 2)]
+    columns = ["name", "id"]
+
+    #Create DataFrame with Implicit Schema
+    df = spark.createDataFrame(data=data, schema=columns)
+    df.show()
+
+    #1.creating Explicit Schema
+    schema = StructType([
+        StructField("name", StringType(), True),
+        StructField("id", IntegerType(), True)
+    ])
+
+    df1 = spark.createDataFrame(data, schema)
+    df1.show()
+    
+  
+#2..creating Explicit Schema 
+data = [(("James",None,"Smith"),"OH","M"),
+        (("Anna","Rose",""),"NY","F"),
+        (("Julia","","Williams"),"OH","F"),
+        (("Maria","Anne","Jones"),"NY","M"),
+        (("Jen","Mary","Brown"),"NY","M"),
+        (("Mike","Mary","Williams"),"OH","M")
+        ]
+        
+from pyspark.sql.types import StructType,StructField, StringType        
+schema = StructType([
+    StructField('name', StructType([
+         StructField('firstname', StringType(), True),
+         StructField('middlename', StringType(), True),
+         StructField('lastname', StringType(), True)
+         ])),
+     StructField('state', StringType(), True),
+     StructField('gender', StringType(), True)
+     ])    
+
+df2 = spark.createDataFrame(data = data, schema = schema)
+
+
+df2.select("name").show(truncate=False)
+df2.select("name.firstname","name.lastname").show(truncate=False)
+df2.select("name.*").show(truncate=False)
+
+----------------------
+
+#DBFS (databricks file system) --it provides faster read and write operations due to its integration with Apache Spark and the underlying infrastructure
+
+dbutils.fs.ls("/dbfs/path/to/directory/") #List Files: 
+dbutils.fs.cp("/dbfs/source_path/file.txt", "/dbfs/destination_path/file.txt") #Copy Files: 
+dbutils.fs.rm("/dbfs/path/to/directory/my_file.txt", recurse=True) #Remove Files(delete temporary files from DBFS after final output is written to ADLS Gen2 to conserve space.)
+
+processed_df.write.mode("overwrite").parquet("/dbfs/path/to/intermediary/processed_data.parquet")
+
+# Write the processed DataFrame to DBFS with error handling
+try:
+    processed_df.write.mode("overwrite").parquet("/dbfs/path/to/intermediary/processed_data.parquet")
+    print("Data written successfully to DBFS.")
+except Exception as e:
+    print(f"Error writing to DBFS: {e}")
+
+#why,use of partition
+#Spark divides data into partitions, which are distributed across the cluster
+# By processing data in partitions, you can take advantage of parallelism
+
+#Optimization(Partitioned Data)  --Each unique value in the specified column(s) will create a separate directory, 
+#won’t see separate metadata files in the same way as with some other formats, but the metadata is embedded within the Parquet files themselves. 
+processed_df.write.partitionBy("category").parquet("/dbfs/path/to/intermediary/processed_data.parquet")
+
+#Reading Partitioned Data
+df = spark.read.parquet("/dbfs/path/to/intermediary/processed_data.parquet")
+
+# Read only the partition for category = 'A'
+df_a = spark.read.parquet("/dbfs/path/to/intermediary/processed_data.parquet/category=A/")
+
+#cache is used to store a DataFrame in memory for faster access in subsequent operations. 
+#(since they can use the cached version instead of recomputing the DataFrame.)
+df_cached = df.cache()
+
+# Reduce to 2 partitions (it decreases the number of partitions without a full shuffle. )
+#merges existing partitions. 
+df_coalesced = df.coalesce(2)
+
+#specify different storage levels (e.g., memory-only, disk-only).
+from pyspark import StorageLevel
+df_persisted = df.persist(StorageLevel.MEMORY_AND_DISK)
+
+# Collect all data from the DataFrame
+all_data = df.collect()  #(use with caution)
+# Print the collected data
+print(all_data)
+# Stop the Spark session
+spark.stop()
+
+#Repartitioning: By ensuring both DataFrames are partitioned by the same key before joining, you can reduce or eliminate shuffles.
+# Instead of this (which causes a shuffle):
+df1.join(df2, "key")
+
+# Consider this approach if possible:
+df1 = df1.repartition("key")
+df2 = df2.repartition("key")
+joined_df = df1.join(df2, "key")
+
+# Perform a broadcast join (Use broadcast joins to minimize shuffle during joins)
+#Each executor now processes its portion of large_df and uses the in-memory copy of small_df to perform the join.
+#ie.each worker node has access to the entire small DataFrame in memory.
+joined_df = large_df.join(broadcast(small_df), "id")
+
+
+----------------------------
+#head() can take an argument to return multiple rows as list of Row objects.(e.g., head(5) for the first 5 rows), 
+#first() always returns a single row. as row object ---.collect()[0] not performance camparing with first()
+#collect() Returns all rows as a list of Row objects (brings the entire DataFrame to the driver).
+#o/p: Row(id=1, name='Alice', amount=100)
+
+#limit() Returns a new DataFrame with the top n rows, then we need to call limit using show  -- it will create new dataframe
+#show() -- after limit we need to run show for output display
+#o/p:|  1|Alice|   100
+
+top_df = df.limit(5) #we need call show after limit query   
+
+head_rows = df.head(5) #data will display
+
+---
+# Select sum of salary
+total_payroll = df.select(sum("salary")).collect()[0]
+
+# total_payroll will be a Row object:
+print(total_payroll)  # Row(sum(salary)=5000000)
+print(total_payroll['sum(salary)'])  # 5000000
+
+total_payroll = df.select(sum("salary")).collect()[0][0]
+
+# total_payroll will be a scalar value:
+print(total_payroll)  # 5000000
+--------
+
+# Add a new column with a constant value
+df = df.withColumn("new_col", lit(100))
+# Add a new column "column_name" with null values and specify the datatype
+df = df.withColumn("column_name", lit(None).cast("string"))  # Change "string" to your desired datatype
+
+#auto numeric(need to check)
+# Define a start value
+start_value = 1000
+
+# Add a new column "id" with monotonically increasing id plus the start value
+df = df.withColumn("id", monotonically_increasing_id() + start_value)
+
+# Show the resulting DataFrame
+df.show()
+
+-----------------
+
+optimized_join.explain()  # Shows the execution plan, highlighting optimizations
+
+---Fault Tolerance
+
+# Define a transformation
+try:
+    processed_df = df.groupBy('user_id').agg({'activity': 'count'})
+except Exception as e:
+    print("Error:", e)
+
+# If a failure occurs, lineage will help recompute missing data
+
+---Cache & Persistence
+
+python
+Copy code
+# Cache the DataFrame for repeated use
+df.cache()
+
+# Perform an action
+result = df.groupBy('user_id').count()
+result.show()  # Data is cached, making this faster
+
+# Persisting the DataFrame to a storage location
+result.write.format("parquet").save("output/user_activity_counts.parquet")
+
+----------------
